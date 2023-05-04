@@ -1,11 +1,11 @@
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const amqplib = require("amqplib");
 
 const {
   APP_SECRET,
   EXCHANGE_NAME,
-  CUSTOMER_SERVICE,
+  SHOPPING_SERVICE,
   MSG_QUEUE_URL,
 } = require("../config");
 
@@ -28,7 +28,7 @@ module.exports.ValidatePassword = async (
 
 module.exports.GenerateSignature = async (payload) => {
   try {
-    return await jwt.sign(payload, APP_SECRET, { expiresIn: "30d" });
+    return await jwt.sign(payload, APP_SECRET, { expiresIn: "1000000d" });
   } catch (error) {
     console.log(error);
     return error;
@@ -57,6 +57,7 @@ module.exports.FormateData = (data) => {
 };
 
 //Message Broker
+
 module.exports.CreateChannel = async () => {
   try {
     const connection = await amqplib.connect(MSG_QUEUE_URL);
@@ -76,31 +77,21 @@ module.exports.PublishMessage = (channel, service, msg) => {
 module.exports.SubscribeMessage = async (channel, service) => {
   await channel.assertExchange(EXCHANGE_NAME, "direct", { durable: true });
   const q = await channel.assertQueue("", { exclusive: true });
-  console.log(`Queue ${q.queue} bound to exchange ${EXCHANGE_NAME} with key ${CUSTOMER_SERVICE}`);
   console.log(` Waiting for messages in queue: ${q.queue}`);
-  console.log("Before bindQueue");
-  channel.bindQueue(q.queue, EXCHANGE_NAME, CUSTOMER_SERVICE);
-  console.log("After bindQueue");
 
-  try {
-    channel.consume(
-      q.queue,
-      (msg) => {
-        if (msg.content) {
-          console.log("the message is:", msg.content.toString());
-          service.SubscribeEvents(msg.content.toString());
-        }
-        console.log("[X] received");
-      },
-      {
-        noAck: true,
+  channel.bindQueue(q.queue, EXCHANGE_NAME, SHOPPING_SERVICE);
+
+  channel.consume(
+    q.queue,
+    (msg) => {
+      if (msg.content) {
+        console.log("the message is:", msg.content.toString());
+        service.SubscribeEvents(msg.content.toString());
       }
-    );
-  } catch (error) {
-    console.log("Error while consuming messages:", error);
-  }
+      console.log("[X] received");
+    },
+    {
+      noAck: true,
+    }
+  );
 };
-
-
-
-
